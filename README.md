@@ -1,6 +1,7 @@
 # algetiming-streamer
-
-##The Timmy protocol from USB
+Software for streaming timer events, and resulst though websockets into web-apps  
+  
+## The Timmy protocol from USB
 examples from the line  
   
 *start* timer event with current time bib12(right) and bib79(left)  
