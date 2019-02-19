@@ -1,5 +1,6 @@
 # algetiming-streamer
 Software for streaming timer events, and resulst though websockets into web-apps  
+The protocol has bib-number in them, so they will also be a part of the streaming process.  
   
 ## The Timmy protocol from USB
 examples from the line  
