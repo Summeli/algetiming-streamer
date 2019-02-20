@@ -13,6 +13,6 @@ examples from the line
 `0012rc1 00:00:09.2540 00`  
 `0078lc4 00:00:05.9847 00`  
    
-*end timer event* with current time for bib12 (right), and bib798left)  
+*end timer event* with current time for bib12 (right), and bib78(left)  
 `0012rC1 10:04:35.6709 00`  
 `0078lC4 10:04:32.4016 00`  
