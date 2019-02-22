@@ -126,12 +126,15 @@ namespace algetiming_streamer
                 } else if (cmd.Equals("rC2"))
                 {
                     //right side FALSE START
+                    webMessage = "srf";
 
                 } else if (cmd.Equals("lC5"))
-                { 
-                   //left side FALSE START
+                {
+                    //left side FALSE START
+                    webMessage = "slf";
 
-                }else if (cmd.Equals("rc1"))
+                }
+                else if (cmd.Equals("rc1"))
                 {
                     //right side finished
                     time = getTimeinMS(data.Substring(10,13));
