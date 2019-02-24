@@ -18,8 +18,11 @@ namespace algetiming_streamer
     {
         private Alge.TimyUsb timyUsb;
         private ClientWebSocket webSocket;
+#if DEBUG
         static String WSURI = "ws://127.0.0.1:8080/time";
-        //private static String WSURI = "ws://default-dot-streaming-clock.appspot.com/time";
+#else
+        private static String WSURI = "ws://default-dot-streaming-clock.appspot.com/time";
+#endif
         private System.Windows.Forms.Timer keepaliveTimer;
         private String fileName = "climbing_results.txt";
         private System.IO.StreamWriter resultsFile;
@@ -41,7 +44,6 @@ namespace algetiming_streamer
             {
                 resultsFile = File.AppendText(filename);
             }
-
             webSocket = new ClientWebSocket();
             webSocket.ConnectAsync(new Uri(WSURI), CancellationToken.None);
 
@@ -63,7 +65,11 @@ namespace algetiming_streamer
             keepaliveTimer.Interval = SERVERKEEPALIVE;
             keepaliveTimer.Tick += new EventHandler(keepaliveTimer_Tick);
             keepaliveTimer.Start();
-
+#if DEBUG
+            AddLogLine("Starting app in DEBUG");
+#else
+            AddLogLine("Starting app in RELEASE");
+#endif
             AddLogLine("Process is " + (IntPtr.Size == 8 ? "x64" : "x86"));
         }
 
