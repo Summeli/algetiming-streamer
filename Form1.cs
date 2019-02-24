@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -8,50 +9,60 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Net.WebSockets;
-using System.Threading;
 using System.Diagnostics;
 using System.Windows.Forms;
-
+using System.Threading;
 namespace algetiming_streamer
 {
-    public partial class Form1 : Form
+    public partial class TimeStreamerForm : Form
     {
-        Alge.TimyUsb timyUsb;
-        ClientWebSocket webSocket;
+        private Alge.TimyUsb timyUsb;
+        private ClientWebSocket webSocket;
         static String WSURI = "ws://127.0.0.1:8080/time";
-        // Timer keepaliveTimer;
+        //private static String WSURI = "ws://default-dot-streaming-clock.appspot.com/time";
+        private System.Windows.Forms.Timer keepaliveTimer;
+        private String fileName = "climbing_results.txt";
+        private System.IO.StreamWriter resultsFile;
 
         public static int SERVERKEEPALIVE = 60 * 1000;
 
-        public Form1()
+        public TimeStreamerForm()
         {
             InitializeComponent();
-            webSocket = new ClientWebSocket();
-            webSocket.ConnectAsync(new Uri(WSURI), CancellationToken.None);
-
-            /*
-            keepaliveTimer = new Timer();
-            keepaliveTimer.Interval = SERVERKEEPALIVE; // 45 mins
-            keepaliveTimer.Tick += new EventHandler(keepaliveTimer_Tick);
-            keepaliveTimer.Start();*/
         }
         private void Form1_Load(object sender, EventArgs e)
         {
+            String filename = System.IO.Path.GetDirectoryName(Application.ExecutablePath) +"\\"+ fileName;
+            if (!File.Exists(filename))
+            {
+                resultsFile = File.CreateText(filename);
+            }
+            else
+            {
+                resultsFile = File.AppendText(filename);
+            }
+
+            webSocket = new ClientWebSocket();
+            webSocket.ConnectAsync(new Uri(WSURI), CancellationToken.None);
+
+            //start the timyUSB stuff
             timyUsb = new Alge.TimyUsb(this);
             timyUsb.Start();
 
-
-
             timyUsb.DeviceConnected += new EventHandler<Alge.DeviceChangedEventArgs>(timyUsb_DeviceConnected);
             timyUsb.DeviceDisconnected += new EventHandler<Alge.DeviceChangedEventArgs>(timyUsb_DeviceDisconnected);
-            //I'm only reading the line, since it's enough
-            timyUsb.LineReceived += new EventHandler<Alge.DataReceivedEventArgs>(timyUsb_LineReceived);
-            /*
-            timyUsb.BytesReceived += timyUsb_BytesReceived;
-            timyUsb.RawReceived += new EventHandler<Alge.DataReceivedEventArgs>(timyUsb_RawReceived);
             timyUsb.PnPDeviceAttached += new EventHandler(timyUsb_PnPDeviceAttached);
             timyUsb.PnPDeviceDetached += new EventHandler(timyUsb_PnPDeviceDetached);
-            timyUsb.HeartbeatReceived += new EventHandler<Alge.HeartbeatReceivedEventArgs>(timyUsb_HeartbeatReceived);*/
+       
+            timyUsb.LineReceived += new EventHandler<Alge.DataReceivedEventArgs>(timyUsb_LineReceived);
+            timyUsb.HeartbeatReceived += new EventHandler<Alge.HeartbeatReceivedEventArgs>(timyUsb_HeartbeatReceived);
+
+
+            
+            keepaliveTimer = new System.Windows.Forms.Timer();
+            keepaliveTimer.Interval = SERVERKEEPALIVE;
+            keepaliveTimer.Tick += new EventHandler(keepaliveTimer_Tick);
+            keepaliveTimer.Start();
 
             AddLogLine("Process is " + (IntPtr.Size == 8 ? "x64" : "x86"));
         }
@@ -60,17 +71,19 @@ namespace algetiming_streamer
         {
             var message = "PING";
             byte[] sendBody = Encoding.UTF8.GetBytes(message);
-            webSocket.SendAsync(new ArraySegment<byte>(sendBody), WebSocketMessageType.Text, true, CancellationToken.None);
-        }
+            if (webSocket.State != WebSocketState.Open)
+            {
+                //socket was not open, try to open it. 
+                webSocket.ConnectAsync(new Uri(WSURI), CancellationToken.None);
+            }
 
-        void timyUsb_BytesReceived(object sender, Alge.BytesReceivedEventArgs e)
-        {
-            AddLogLine("Device " + e.Device.Id + " Bytes: " + e.Data.Length);
+            webSocket.SendAsync(new ArraySegment<byte>(sendBody), WebSocketMessageType.Text, true, CancellationToken.None);
+            AddLogLine("PING");
         }
 
         void timyUsb_HeartbeatReceived(object sender, Alge.HeartbeatReceivedEventArgs e)
         {
-            AddLogLine("Heartbeat: " + e.Time.ToString());
+            Debug.WriteLine("Heartbeat: " + e.Time.ToString());
         }
 
         void timyUsb_PnPDeviceDetached(object sender, EventArgs e)
@@ -83,16 +96,10 @@ namespace algetiming_streamer
             AddLogLine("Device attached");
         }
 
-        void timyUsb_RawReceived(object sender, Alge.DataReceivedEventArgs e)
-        {  
-
-            AddLogLine("Device " + e.Device.Id + " Raw: " + e.Data);
-
-        }
 
         void timyUsb_LineReceived(object sender, Alge.DataReceivedEventArgs e)
         {
-            AddLogLine("Device " + e.Device.Id + " Line: " + e.Data);
+            Debug.WriteLine("Device " + e.Device.Id + " Line: " + e.Data);
             String webMessage = null;
             String data = e.Data;
             String bib;
@@ -127,12 +134,12 @@ namespace algetiming_streamer
                 {
                     //right side FALSE START
                     webMessage = "srf";
-
+                    writeResults("bib: " + bib + " false start");
                 } else if (cmd.Equals("lC5"))
                 {
                     //left side FALSE START
                     webMessage = "slf";
-
+                    writeResults("bib: " + bib + " false start");
                 }
                 else if (cmd.Equals("rc1"))
                 {
@@ -140,6 +147,7 @@ namespace algetiming_streamer
                     time = getTimeinMS(data.Substring(10,13));
                     webMessage = "ssr"+time+"b"+bib;
                     Debug.WriteLine(time);
+                    writeResults("bib: " + bib + " time: "+ data.Substring(10, 13));
                 }
                 else if(cmd.Equals("lc4"))
                 {
@@ -147,16 +155,28 @@ namespace algetiming_streamer
                     time = getTimeinMS(data.Substring(10, 13));
                     webMessage = "ssl" + time + "b" + bib;
                     Debug.WriteLine(time);
+                    writeResults("bib: " + bib + " time: " + data.Substring(10, 13));
                 }
             }
             //did we actually construct a command
             if (webMessage != null)
             {
+                if(webSocket.State != WebSocketState.Open)
+                {
+                    //socket was not open, try to open it. 
+                    webSocket.ConnectAsync(new Uri(WSURI), CancellationToken.None);
+                }
                 byte[] sendBody = Encoding.UTF8.GetBytes(webMessage);
                 webSocket.SendAsync(new ArraySegment<byte>(sendBody), WebSocketMessageType.Text, true, CancellationToken.None);
+                resetTimer(); //connection is alive, so reset the timer
             }
         }
 
+        private void resetTimer()
+        {
+            keepaliveTimer.Stop();
+            keepaliveTimer.Start();
+        }
         private void ProcessProgramResponse(string line)
         {   
             String programString = line.Substring(6);
@@ -175,8 +195,16 @@ namespace algetiming_streamer
 
         void AddLogLine(String str)
         {
-            Debug.WriteLine(str);
+            status.Items.Insert(0, str);
         }
+
+        private void writeResults(String str)
+        {
+            results.Items.Insert(0, str);
+            resultsFile.WriteLine(str);
+            resultsFile.Flush();
+        }
+
         private String getTimeinMS(String time)
         {
             String min = time.Substring(3, 2);
@@ -191,11 +219,11 @@ namespace algetiming_streamer
             timyUsb.DeviceConnected -= new EventHandler<Alge.DeviceChangedEventArgs>(timyUsb_DeviceConnected);
             timyUsb.DeviceDisconnected -= new EventHandler<Alge.DeviceChangedEventArgs>(timyUsb_DeviceDisconnected);
             timyUsb.LineReceived -= new EventHandler<Alge.DataReceivedEventArgs>(timyUsb_LineReceived);
-            /*timyUsb.BytesReceived -= timyUsb_BytesReceived;
-            timyUsb.RawReceived -= new EventHandler<Alge.DataReceivedEventArgs>(timyUsb_RawReceived);
             timyUsb.PnPDeviceAttached -= new EventHandler(timyUsb_PnPDeviceAttached);
             timyUsb.PnPDeviceDetached -= new EventHandler(timyUsb_PnPDeviceDetached);
-            timyUsb.HeartbeatReceived -= new EventHandler<Alge.HeartbeatReceivedEventArgs>(timyUsb_HeartbeatReceived);*/
+            timyUsb.HeartbeatReceived -= new EventHandler<Alge.HeartbeatReceivedEventArgs>(timyUsb_HeartbeatReceived);
+            resultsFile.Flush();
+            resultsFile.Close();
         }
 
         private void listBox1_SelectedIndexChanged(object sender, EventArgs e)

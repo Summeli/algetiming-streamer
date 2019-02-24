@@ -1,6 +1,6 @@
 ﻿namespace algetiming_streamer
 {
-    partial class Form1
+    partial class TimeStreamerForm
     {
         /// <summary>
         /// Required designer variable.
@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(TimeStreamerForm));
             this.results = new System.Windows.Forms.ListBox();
             this.status = new System.Windows.Forms.ListBox();
             this.SuspendLayout();
@@ -50,15 +51,16 @@
             this.status.TabIndex = 1;
             this.status.SelectedIndexChanged += new System.EventHandler(this.listBox1_SelectedIndexChanged_1);
             // 
-            // Form1
+            // TimeStreamerForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(800, 450);
             this.Controls.Add(this.status);
             this.Controls.Add(this.results);
-            this.Name = "Form1";
-            this.Text = "Form1";
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
+            this.Name = "TimeStreamerForm";
+            this.Text = "Alge-Timing Streamer";
             this.Load += new System.EventHandler(this.Form1_Load);
             this.ResumeLayout(false);
 

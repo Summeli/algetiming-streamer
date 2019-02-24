@@ -37,7 +37,7 @@ namespace algetiming_streamer
             // Attach an event handler for missing assemblies
             AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler(CurrentDomain_AssemblyResolve);
 
-            Application.Run(new Form1());
+            Application.Run(new TimeStreamerForm());
         }
         #region x86/x64 compatibility
 
