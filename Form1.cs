@@ -73,14 +73,31 @@ namespace algetiming_streamer
             AddLogLine("Process is " + (IntPtr.Size == 8 ? "x64" : "x86"));
         }
 
+        private void reConnectWebSocket()
+        {
+            try
+            {
+                //socket was not healthy
+                webSocket.Dispose();
+                webSocket = new ClientWebSocket();
+                webSocket.ConnectAsync(new Uri(WSURI), CancellationToken.None);
+                AddLogLine("Created a new websocket");
+            }
+            catch (Exception ex)
+            {
+                AddLogLine("reconnecting the websocket failed" + ex.Message);
+            }
+        }
         private void keepaliveTimer_Tick(object sender, EventArgs e)
         {
+            //Just write something to keep the connection alive, 
+            //for PING I would have to read for PONG, I don't want to overcomplicate this C# implementation
             var message = "PING";
             byte[] sendBody = Encoding.UTF8.GetBytes(message);
             if (webSocket.State != WebSocketState.Open)
             {
-                //socket was not open, try to open it. 
-                webSocket.ConnectAsync(new Uri(WSURI), CancellationToken.None);
+                reConnectWebSocket();
+                return; //no need to send anything this time
             }
 
             webSocket.SendAsync(new ArraySegment<byte>(sendBody), WebSocketMessageType.Text, true, CancellationToken.None);
@@ -167,12 +184,11 @@ namespace algetiming_streamer
             //did we actually construct a command
             if (webMessage != null)
             {
-                if(webSocket.State != WebSocketState.Open)
-                {
-                    //socket was not open, try to open it. 
-                    webSocket.ConnectAsync(new Uri(WSURI), CancellationToken.None);
-                }
                 byte[] sendBody = Encoding.UTF8.GetBytes(webMessage);
+                if (webSocket.State != WebSocketState.Open)
+                {
+                    reConnectWebSocket();
+                }
                 webSocket.SendAsync(new ArraySegment<byte>(sendBody), WebSocketMessageType.Text, true, CancellationToken.None);
                 resetTimer(); //connection is alive, so reset the timer
             }
