@@ -23,15 +23,27 @@ namespace algetiming_streamer
 #else
         private static String WSURI = "ws://default-dot-streaming-clock.appspot.com/time";
 #endif
-        private System.Windows.Forms.Timer keepaliveTimer;
+        //file to write resuts, just in case
         private String fileName = "climbing_results.txt";
         private System.IO.StreamWriter resultsFile;
 
+        //keepalive timer, so the connection won't stop
+        private System.Windows.Forms.Timer keepaliveTimer;
         public static int SERVERKEEPALIVE = 60 * 1000;
+
+        //retry-system for failed messages
+        public static int RETRYTIME = 500;
+        private List<String> failedMessageList;
+        private System.Windows.Forms.Timer retryTimer;
+
+        //the connection seeems to be alive for an hour, reconstruct it again before it goes bad
+        public static int SERVERRECONNECTTIMER = 55 * 60 * 1000 + 500;
+        private System.Windows.Forms.Timer serverReconnectTimer;
 
         public TimeStreamerForm()
         {
             InitializeComponent();
+            failedMessageList = new List<String>();
         }
         private void Form1_Load(object sender, EventArgs e)
         {
@@ -65,6 +77,15 @@ namespace algetiming_streamer
             keepaliveTimer.Interval = SERVERKEEPALIVE;
             keepaliveTimer.Tick += new EventHandler(keepaliveTimer_Tick);
             keepaliveTimer.Start();
+
+            retryTimer = new System.Windows.Forms.Timer();
+            retryTimer.Interval = RETRYTIME;
+            retryTimer.Tick += new EventHandler(retryTick);
+
+            serverReconnectTimer = new System.Windows.Forms.Timer();
+            serverReconnectTimer.Interval = SERVERRECONNECTTIMER;
+            serverReconnectTimer.Tick += new EventHandler(keepTheConnectionAlive);
+            serverReconnectTimer.Start();
 #if DEBUG
             AddLogLine("Starting app in DEBUG");
 #else
@@ -83,9 +104,46 @@ namespace algetiming_streamer
                 webSocket.ConnectAsync(new Uri(WSURI), CancellationToken.None);
                 AddLogLine("Created a new websocket");
             }
+        
             catch (Exception ex)
             {
                 AddLogLine("reconnecting the websocket failed" + ex.Message);
+            }
+        }
+
+        private void keepTheConnectionAlive(object sender, EventArgs e)
+        {
+            //the connection must be re-created at sometimes to keep things on-going
+            reConnectWebSocket();
+        }
+
+        private void retryTick(object sender, EventArgs e)
+        {
+            AddLogLine("Failed stuff, retrying");
+            if (webSocket.State != WebSocketState.Open)
+            {
+                return;
+            }
+            if (failedMessageList.Count() > 0)
+            {
+                String message = failedMessageList[0];
+                byte[] sendBody = Encoding.UTF8.GetBytes(message);
+                try
+                {
+                    webSocket.SendAsync(new ArraySegment<byte>(sendBody), WebSocketMessageType.Text, true, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    AddLogLine("Retry send message exception: " + ex.Message);
+                }
+                //ok, message sent, remove it from the LIST
+                AddLogLine("RetrySent for message " + message+ " succeeded");
+                failedMessageList.RemoveAt(0);
+            }
+            else
+            {
+                //no data in the buffer, stop timer
+                retryTimer.Stop();
             }
         }
         private void keepaliveTimer_Tick(object sender, EventArgs e)
@@ -99,9 +157,17 @@ namespace algetiming_streamer
                 reConnectWebSocket();
                 return; //no need to send anything this time
             }
-
-            webSocket.SendAsync(new ArraySegment<byte>(sendBody), WebSocketMessageType.Text, true, CancellationToken.None);
-            AddLogLine("PING");
+            try
+            {
+                webSocket.SendAsync(new ArraySegment<byte>(sendBody), WebSocketMessageType.Text, true, CancellationToken.None);
+                AddLogLine("PING");
+            }
+            catch(Exception ex)
+            {
+                AddLogLine("keepalive exception: "+ ex.Message);
+                failedMessageList.Add(message);
+                retryTimer.Start();
+            }
         }
 
         void timyUsb_HeartbeatReceived(object sender, Alge.HeartbeatReceivedEventArgs e)
@@ -189,8 +255,18 @@ namespace algetiming_streamer
                 {
                     reConnectWebSocket();
                 }
-                webSocket.SendAsync(new ArraySegment<byte>(sendBody), WebSocketMessageType.Text, true, CancellationToken.None);
-                resetTimer(); //connection is alive, so reset the timer
+
+                try
+                {
+                    //Send the message
+                    webSocket.SendAsync(new ArraySegment<byte>(sendBody), WebSocketMessageType.Text, true, CancellationToken.None);
+                    resetTimer(); //connection is alive, so reset the timer
+                } catch (Exception ex)
+                {
+                    AddLogLine("Websocket send mesage failed: " + ex.Message);
+                    failedMessageList.Add(webMessage);
+                    retryTimer.Start();
+                }
             }
         }
 
