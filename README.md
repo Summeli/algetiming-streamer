@@ -16,3 +16,10 @@ examples from the line
 *end timer event* with current time for bib12 (right), and bib78(left)  
 `0012rC1 10:04:35.6709 00`  
 `0078lC4 10:04:32.4016 00`  
+
+*feet up / no weight event* for bib12 (right), and bib78(left)  
+`0012rC2 10:07:20.2731 00`  
+`0078lC5 10:07:20.2731 00`  
+
+## Known issues  
+The false start is currently not recognized properly. It should actually be feet up / no weight events, which we should not stream to others.  
